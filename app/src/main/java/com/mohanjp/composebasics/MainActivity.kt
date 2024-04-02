@@ -1,21 +1,20 @@
 package com.mohanjp.composebasics
 
+import android.content.ClipboardManager
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -27,11 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import coil.compose.rememberImagePainter
 import com.mohanjp.composebasics.ui.theme.ComposeBasicsTheme
-import kotlin.properties.Delegates
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 class MainActivity : ComponentActivity() {
     
@@ -45,92 +47,89 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    NameListScreen()
+                    CopyImage(
+                        modifier = Modifier
+                            .fillMaxSize()
+                    )
                 }
             }
         }
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
-    ComposeBasicsTheme {
-        NameListScreen()
-    }
-}
-
-@Composable
-fun NameListScreen() {
-    var names by remember {
-        mutableStateOf(listOf<String>())
-    }
-
-    var name by remember {
-        mutableStateOf("")
-    }
-
-    println("Value changed >>")
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            OutlinedTextField(
-                modifier = Modifier
-                    .weight(1f),
-                value = name,
-                onValueChange = { text ->
-                    name = text
-                }
-            )
-
-            Spacer(
-                modifier = Modifier
-                    .width(15.dp)
-            )
-
-            Button(onClick = {
-                if(name.isNotBlank()) {
-                    names += name
-                    //name = ""
-                }
-            }) {
-                Text(text = "Add to List")
-            }
-        }
-
-        ShowNameList(names = names)
-    }
-}
-
-@Composable
-fun ShowNameList(
-    names: List<String>,
+fun CopyImage(
     modifier: Modifier = Modifier
 ) {
-    println("lazy column function called")
 
-    LazyColumn(modifier) {
+    var filePath by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
-        items(names) { name ->
-            println("rendering item")
+    Column(
+        modifier = modifier
+            .padding(16.dp)
+    ) {
+        OutlinedTextField(
+            value = filePath,
+            onValueChange = { },
+            label = { Text("Paste image path here") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        )
 
-            Text(
-                text = name,
+        Button(onClick = {
+
+            val clipboardManager =
+                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val item = clipboardManager.primaryClip?.getItemAt(0)
+            val clipData = item?.uri
+
+            val imageContentUri = clipData.toString()
+
+            try {
+                Uri.parse(imageContentUri) // Check if the URL is valid
+                filePath = getFilePathFromUri(context, imageContentUri.toUri()) ?: ""
+
+                println(filePath)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                println("exception: $e")
+            }
+
+        }) {
+            Text(text = "Paste")
+        }
+
+        if (filePath.isNotBlank()) {
+            Image(
+                painter = rememberImagePainter(filePath),
+                contentDescription = "Pasted Image",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .height(200.dp)
             )
-
-            Divider()
         }
     }
+}
+
+
+fun getFilePathFromUri(context: Context, uri: Uri): String? {
+    val contentResolver: ContentResolver = context.contentResolver
+    val inputStream: InputStream? = contentResolver.openInputStream(uri)
+
+    if (inputStream != null) {
+        val file = File(context.filesDir, "temp_file.jpg")
+
+        val outputStream = FileOutputStream(file)
+        inputStream.use { input ->
+            outputStream.use { output ->
+                input.copyTo(output)
+            }
+        }
+
+        return file.absolutePath
+    }
+    return null
 }
